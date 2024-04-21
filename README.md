@@ -13,6 +13,9 @@ python3 ./src/main.py --config_format base --wandb --wandb_project llm-hack --mo
 ```
 This should work with the docker image provided for the hackathon, but in case there are some packages missing which are needed in the code, you could also use the image at `registry.rcp.epfl.ch/vita/lauzhack_llm`.
 
+Unfortunately, we don't have access to the checkpoints, as they were overrided with later submissions with same setting! (We turned off the checkpoint existence check, as it was annoying for debug :D)
+
+We would be very thankful if you could re-train the model for evaluation. You can access the [wandb report](https://wandb.ai/socialcausality/llm-hack/workspace?nw=nwuserahmadrahimi) to check our different experiments (the final submission's name is `llama2-moe-e4-ept2`).
 ## Ideas tried and lessons learned
 We found it very hard to beat the gpt2 baseline provided with the original code, and we think the baseline is very strong (maybe a bit too strong to beat in the scope of a hackathon :D). 
 We started by playing with some hyperparameters like the learning rate, size of the model (making it both smaller and larger), the warmup, and the batch size, but all of them led to worse results!
