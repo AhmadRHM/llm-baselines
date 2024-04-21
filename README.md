@@ -35,5 +35,3 @@ We found that it is a bit helpful to have better results.
 4. ***Different Attention Mechanisms*** Another point of our investigation was the exploration of alternative attention mechanisms. A local attention mechanism is implemented to assess its potential superiority over the standard approach, as well as experimented with combining global and local attention. These variations led to slower training compared to the standard mechanism. Additionally, we contemplated leveraging orthonormal matrices for query, key, and value to potentially extract richer features. However, the computational overhead proved prohibitive, prompting us to discontinue this line of exploration.
 
 5. ***LAMP Optimizer*** Furthermore, the effect of different optimizers is investigated. Initially, the LAMP optimizer was applied, tailored specifically for Large Language Models (LLMs). However, LAMP's performance suffered with our batch size of 32, indicating its preference for larger batch sizes.
-
-6. 
