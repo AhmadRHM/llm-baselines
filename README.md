@@ -1,136 +1,31 @@
-# LLM-baselines
+# Vita team submission
 
-A modular codebase to experiment with transformers, inspired by NanoGPT. 
+The code base containing our changes and added modules for the hackathon on LLM pretraining.
 
-## Quickstart 
+We tried several ideas, like mixture of experts, label smoothing for cross entropy, using different optimizers, regularizers, using QR decomposition, and playing with hyperparameters.
 
-Install dependencies: 
+We will first share the setup for our best results, and then share the ideas we tried and what we learned from them.
 
+## Our final results
+The highest accuracy we could achieve on the validation set after 3 hours of training is ***0.4361***. Here is the command to train this model:
 ```
-pip install -r requirements.txt
+python3 ./src/main.py --config_format base --wandb --wandb_project llm-hack --model llama2 --moe_num_experts 4 --iterations 11000 --moe_num_experts_per_tok 2
 ```
+This should work with the docker image provided for the hackathon, but in case there are some packages missing which are needed in the code, you could also use the image at `registry.rcp.epfl.ch/vita/lauzhack_llm`.
 
-Run a simple training on the Slimpajama dataset ([6B subset](https://huggingface.co/datasets/DKYoon/SlimPajama-6B), 24GBs decompressed, takes a few minutes to download):
+## Ideas tried and lessons learned
+We found it very hard to beat the gpt2 baseline provided with the original code, and we think the baseline is very strong (maybe a bit too strong to beat in the scope of a hackathon :D). 
+We started by playing with some hyperparameters like the learning rate, size of the model (making it both smaller and larger), the warmup, and the batch size, but all of them led to worse results!
+We had several ideas that we also shared in the presentation on Saturday. Here we will go over each of them, explaining them briefly, and sharing our take home message.
 
-```sh
-python ./src/main.py --config_format base
-```
-
-The above command trains a 123.59M parameters model. It trains for 25k iterations with a batch size of 128=32x4 (4 gradient accumulation steps), using a cosine schedule with a maximum learning rate of 1e-3 that is reduced to 1e-4 at the end of training. The model is saved in the `./exps` folder.
-
-This training takes roughly ~3h on a single A100 (80GB) GPU. The plot of the training and validation loss should look roughly like this:
-
-<img src="./assets/loss_slimpajama.png" alt="Loss on SlimPajama" width="500"/>
-<img src="./assets/pplx_slimpajama.png" alt="Perplexity on SlimPajama" width="500"/>
-
-You can check out the wandb run for yourself [here](https://wandb.ai/haeggee/llm-lauzhack/runs/lm2obqy9?nw=nwuserhaeggee).
-
-
-## Less quick start
-
-Here are the possible parameters you can use (copypasted from `config/base.py`):
-
-```python
-# General training params
-parser.add_argument('--batch_size', default=32, type=int)
-parser.add_argument('--acc_steps', default=4, type=int)
-parser.add_argument('--seed', default=0, type=int) # random seed for the parameters
-parser.add_argument('--data_seed', default=1337, type=int) # random seed defining the data ordering
-parser.add_argument('--device', default='cuda:0', type=str) # see below to run on multiple GPUs
-parser.add_argument('--iterations', default=25000, type=int) # total number of training iterations
-parser.add_argument('--lr', default=1e-3, type=float) 
-parser.add_argument('--warmup_percent', default=0.05, type=float) # the total number of warmup steps is iterations * warmup_percent
-parser.add_argument('--weight_decay', default=0.1, type=float) # I recommend you keep this value, else instabilities might arise
-parser.add_argument('--beta1', default=0.9, type=float) # adam parameter
-parser.add_argument('--beta2', default=0.95, type=float) # adam parameter
-parser.add_argument('--scheduler', default='cos', choices=['linear', 'cos', 'none'])
-parser.add_argument('--opt', default='adamw', choices=['adamw', 'sgd'])
-parser.add_argument('--eval_freq', default=200, type=int) # in iterations
-parser.add_argument('--results_base_folder', default="./exps", type=str) # where the checkpoints will be saved
-parser.add_argument('--grad_clip', default=0.0, type=float) # default value is 1.0 in NanoGPT
-# Dataset params
-parser.add_argument('--dataset', default='slimpajama', choices=['slimpajama', 'wikitext', "shakespeare-char", 'arxiv', "arxiv2000", "arxiv+wiki", 'openwebtext2'])
-parser.add_argument('--vocab_size', default=50304, type=int)
-parser.add_argument('--data_in_ram', action='store_true') # force the data to RAM, you most likely do not need this  
-# Model params
-parser.add_argument('--model', default='base', choices=['base', 'llama2'])
-parser.add_argument('--use_pretrained', default="none", type=str) # 'none', 'gpt-2' or a path to the pretraind model
-parser.add_argument('--dropout', default=0.0, type=float) # keep to 0 unless in low data regime (e.g. wikitext)
-parser.add_argument('--n_head', default=12, type=int)
-parser.add_argument('--n_layer', default=12, type=int) # depth in (att + ff) blocks
-parser.add_argument('--n_embd', default=768, type=int) # hidden size ... 
-parser.add_argument('--sequence_length', default=512, type=int)
-parser.add_argument('--dtype', default=torch.bfloat16, type=torch.dtype)
-parser.add_argument('--bias', default=False, type=bool)
-parser.add_argument('--compile', action='store_true') # if true then model is compiled 
-parser.add_argument('--rmsnorm_eps', default=1e-5, type=float) # used by the llama model
-parser.add_argument('--multiple_of', default=256, type=int) # used by the llama model make SwiGLU hidden layer size multiple of large power of 2
-# logging params (WandB)
-parser.add_argument('--wandb', action='store_true') # whether to use wandb or not
-parser.add_argument('--wandb_project', default="my-project", type=str)
-parser.add_argument('--wandb_run_prefix', default="none", type=str) # is added before the autogenerated experiment name
-parser.add_argument('--eval_seq_prefix', default="Once upon a time", type=str) # prefix used to generate sequences
-# Distributed args
-parser.add_argument('--distributed_backend', default=None, type=str, required=False,
-                    choices=distributed.registered_backends())  # distributed backend type (e.g. nccl)
-parser.add_argument('--save_checkpoint_freq', default=None, type=int, required=False)
-```
-
-## Using WandB
-
-You need to give your wandb authorize key in order to send the data to your wandb account. If you start jobs on a server without access to prompt, then you can set the `WANDB_API_KEY` variable within your script:
-
-```bash
-# this is a script that could be executed on a server
-pip install -r requirements.txt # install req.
-export WANDB_API_KEY="put your authorize key here, to find it: https://wandb.ai/authorize"
-python ./src/main.py --config_format base --wandb --wandb_project "my awesome project" --n_layer 7 --model base --seed 123
-```
-
-## How to add your own transformer architecture? 
-
-The structure of the project is the following: 
-
-```sh
-src/
-    main.py         # pick the right data, model, and training function
-    config/
-        __init__.py # contains CONFIG_FORMAT_TO_MODULE_MAP mapping the name given to the --config_format flag with a python conf file
-        base.py     # config for the base model
-    data/
-        utils.py    # contains the get_dataset function
-        wikitext.py # load/process wikitext
-        arxiv.py    # load/process arxiv
-        shakespeare.py # load/process the Shakespeare dataset
-        slimpajama.py
-        ...
-    models/
-        utils.py    # contains the get_model function
-        base.py     # contains the standard transformer base architecture
-        llama.py    # llama architecture
-    optim/
-        utils.py    # contains eval and get_batch functions
-        base.py     # training function for the base and llama models
-    distributed/
-        # code to enable simple distributed training
-```
-
-Given the above structure, to add your own model, you can just fork the `./src/models/base.py` file, do your modifications, then if necessary fork the `./src/optim/base.py` in case you need some custom training loop or evaluation. You also need to fork the `./src/config/base.py` file to add your own parameters, which imply adding your new config to the mapping `CONFIG_FORMAT_TO_MODULE_MAP` in `./src/config/__init__.py`. To add a new dataset, create a new file in the `data` folder, check `wikitext.py` for the expected format. 
-
-## Multi-GPU training
-
-Given a multi-GPU machine with e.g. 4 GPUs, one can distribute the training using data-parallelism:
-
-```sh
-torchrun --nproc_per_node=4 ./src/main.py --config_format base --distributed_backend nccl --dataset slimpajama --model base
-```
-
-When using multiple GPUs, the data will be distributed among the GPUs by dividing the number of accumulation steps by the number of nodes. For instance if we train with a batch size of 32 and 4 accumulation steps, then each GPU will process batches of 32 elements and do 1 accumulation steps. For this reason we require `acc_steps` to be a multiple of the number of GPUs.    
-
-
-## Experimenting locally on your device with CPU
-If do not have access to a GPU or just want to try the code locally on your device, you can try the Shakespeare dataset with character-level tokens:
-
-```sh
-python ./src/main.py --n_layer=2 --n_head=4 --n_embd=128 --sequence_length=256 --dataset=shakespeare-char --device=cpu --vocab_size=96
-```
+1. ***MoE:*** One of the ideas that we tried and were able to improve the baseline is mixture of experts. 
+The idea is that in the feed forward part of the model, we use several copies of the MLP, each of them being an expert in certain areas.
+We then use a router which chooses which experts to use for each token. There are several auxiliary loss functions, ensuring load balance for different experts.
+Our idea was that using this architecture, we could increase the number of parameters of the model by adding more experts, hopefully leading to better modeling more complex texts and patterns, without computational overhead.
+However, after implementing this idea in the code, we found out that the base model's implementation is very optimized, unlike our MoE implementation.
+Additionally, updating multiple experts at training time multiplies the training time. 
+These two were the drawbacks of this approach which we think kept us from achieving substantial improvements. We also tried other off the shelf MoE models like ST-MoE, but they didn't turn out to work well neither.
+Nevertheless, our final approach uses MoE which shows some improvement over the baseline.
+2. ***Label smoothing:*** The idea is that instead of having the one hot target for training, we use a smoother one in the cross entropy. 
+For example, if the smoothing value is 0.1, it means that the target probability for the cross entropy loss is 0.9 for the correct token (instead of 1), and the 0.1 is distributed uniformly for all other tokens.
+We found that it is a bit helpful to have better results.

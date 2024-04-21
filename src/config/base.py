@@ -31,9 +31,16 @@ def parse_args(base_parser, args, namespace):
     parser.add_argument('--vocab_size', default=50304, type=int)
     parser.add_argument('--data_in_ram', action='store_true') # force the data to RAM, mostly useless except for openwebtext2 
     # Model params
-    parser.add_argument('--model', default='base', choices=['base', 'llama2'])
+    parser.add_argument('--model', default='base', choices=['base', 'llama2', 'st-moe'])
     parser.add_argument('--use_pretrained', default="auto", type=none_or_str) # 'none', 'gpt-2' or a path to the pretraind model
     parser.add_argument('--dropout', default=0.0, type=float)
+    parser.add_argument('--label_smoothing', default=0, type=float)
+    parser.add_argument('--router_z_coef', default=1e-3, type=float)
+    parser.add_argument('--balance_loss_coef', default=1e-2, type=float)
+    parser.add_argument('--window_size', default=0, type=int)
+    parser.add_argument('--moe_num_experts', default=16, type=int)
+    parser.add_argument('--moe_num_experts_per_tok', default=2, type=int)
+    parser.add_argument('--moe_softmax_order', default="softmax_topk", choices=["softmax_topk", "topk_softmax"])
     parser.add_argument('--n_head', default=12, type=int)
     parser.add_argument('--n_layer', default=12, type=int) # depths in att + ff blocks
     parser.add_argument('--n_embd', default=768, type=int) # embedding size / hidden size ... 

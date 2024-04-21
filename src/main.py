@@ -93,13 +93,13 @@ def main(args):
         wandb.init(project=args.wandb_project, name=exp_name, config=params_copy)
     
     ckpt_path = os.path.join(args.results_base_folder, args.dataset, args.model, exp_name)
-    if not os.path.exists(ckpt_path):
-        if distributed_backend.is_master_process():
-            os.makedirs(ckpt_path)
-        distributed_backend.sync()
-    elif os.path.isfile(os.path.join(ckpt_path, "summary.json")): # the experiment was already completed
-        print(f"Already found experiment '{ckpt_path}'.\nSkipping.")
-        sys.exit(0)
+    # if not os.path.exists(ckpt_path):
+    if distributed_backend.is_master_process():
+        os.makedirs(ckpt_path, exist_ok=True)
+    distributed_backend.sync()
+    # elif os.path.isfile(os.path.join(ckpt_path, "summary.json")): # the experiment was already completed
+    #     print(f"Already found experiment '{ckpt_path}'.\nSkipping.")
+    #     sys.exit(0)
 
     itr = 0
     rng_state_dict = None
@@ -135,7 +135,7 @@ def main(args):
             scheduler_state_dict = checkpoint['scheduler']
             scheduler.load_state_dict(scheduler_state_dict)
 
-    if args.model in ['base', 'llama2']: # all train functions have the same interface
+    if args.model in ['base', 'llama2', 'st-moe']: # all train functions have the same interface
         train = train_base
     else:
         raise NotImplementedError(f"No training method implemented for model type '{args.model}'.")

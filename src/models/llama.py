@@ -21,6 +21,8 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 from models.base import CausalSelfAttention, GPTBase
+from .moe import MoE
+from .aux_losses import entropy_reg, load_balancing_loss, router_z_loss
 
 
 def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0) -> torch.Tensor:
@@ -138,12 +140,22 @@ class LlamaBlock(nn.Module):
         self.ln_1 = RMSNorm(config.n_embd, eps=config.rmsnorm_eps)
         self.attn = LlamaAttention(config)
         self.ln_2 = RMSNorm(config.n_embd, eps=config.rmsnorm_eps)
-        self.mlp = LlamaMLP(config)
+        self.config = config
+        if config.moe_num_experts == 0:
+            self.mlp = LlamaMLP(config)
+        else:
+            self.mlp = MoE(config, LlamaMLP)
+        # self.mlp = LlamaMLP(config)
 
     def forward(self, x, freqs_cis):
         x = x + self.attn(self.ln_1(x), freqs_cis)
-        x = x + self.mlp(self.ln_2(x))
-        return x
+        if self.config.moe_num_experts == 0:
+            x = x + self.mlp(self.ln_2(x))
+            return x
+        else:
+            out, aug_out = self.mlp(self.ln_2(x))
+            x = x + out
+            return x, aug_out
 
 
 class Llama(GPTBase):
@@ -210,17 +222,23 @@ class Llama(GPTBase):
 
         x = self.transformer.drop(tok_emb)
         freqs_cis = self.freqs_cis.to(x.device)[pos]
-
+        total_aux_loss_sum = 0
         for block_idx, block in enumerate(self.transformer.h):
-            x = block(x, freqs_cis=freqs_cis)
+            if self.config.moe_num_experts == 0:
+                x = block(x, freqs_cis=freqs_cis)
+            else:
+                x, aux_data = block(x, freqs_cis=freqs_cis)
+                balance_loss = load_balancing_loss(aux_data["router_logits"], aux_data["selected_experts"])
+                router_z = router_z_loss(aux_data["router_logits"])
+                total_aux_loss_sum += self.config.balance_loss_coef * balance_loss + self.config.router_z_coef * router_z
         x = self.transformer.ln_f(x)
 
         if targets is not None:
             # if we are given some desired targets also calculate the loss
             logits = self.lm_head(x)
             loss = F.cross_entropy(
-                logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1
-            )
+                logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1, label_smoothing=self.config.label_smoothing
+            ) + total_aux_loss_sum
         else:
             # inference-time mini-optimization: only forward the lm_head on the very last position
             logits = self.lm_head(
